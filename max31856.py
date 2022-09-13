@@ -45,13 +45,14 @@ cs25 = digitalio.DigitalInOut(board.D25)
 cs25.direction = digitalio.Direction.OUTPUT
 cs24 = digitalio.DigitalInOut(board.D24)
 cs24.direction = digitalio.Direction.OUTPUT
-Heater = digitalio.DigitalInOut(board.D30)
-Heater.direction= digitalio.Direction.Output
+Heater = digitalio.DigitalInOut(board.D16)
+Heater.direction= digitalio.Direction.OUTPUT
 
 # create a thermocouple object with the above
-HeatEx = adafruit_max31856.MAX31856(spi, cs5,thermocouple_type=1)
-Chamber = adafruit_max31856.MAX31856(spi, cs25,thermocouple_type=3)
-ColdHead = adafruit_max31856.MAX31856(spi, cs24,thermocouple_type=1)
+HeatEx = adafruit_max31856.MAX31856(spi, cs5,thermocouple_type=adafruit_max31856.ThermocoupleType.K)
+Chamber = adafruit_max31856.MAX31856(spi, cs25,thermocouple_type=adafruit_max31856.ThermocoupleType.T)
+ColdHead = adafruit_max31856.MAX31856(spi, cs24,thermocouple_type=adafruit_max31856.ThermocoupleType.K)
+
 Heater.value = False
 
 targetT = 26    #initial inputs for PID control
@@ -97,54 +98,62 @@ t=0
 Heat_on=True
 # measure the temperature! (takes approx 160ms)
 while True:
-    if keyboard.is_pressed('a'):    #hopefully a key interupt to the program, this sort of works by the way
-        print('exitit key pressed')
-        break
+    error=0
+    #if keyboard.is_pressed('a'):    #hopefully a key interupt to the program, this sort of works by the way
+        #print('exitit key pressed')
+        #break
     t += 1
     temp_coldhead=ColdHead.temperature
     temp_chamber=Chamber.temperature
     temp_heatex=HeatEx.temperature
-    if (np.abs(heatex_temps[-1]-temp_heatex)>= 2 or np.abs(chamber_temps[-1]-temp_chamber)>= 2 or np.abs(coldhead_temps[-1]-temp_coldhead)>= 2) and t!=1:
-        log_error(err_log_f_name,"Error in reported temperature vaule",t,False)
-        error+=1
-        continue
+    #if (np.abs(heatex_temps[-1]-temp_heatex)>= 3 or np.abs(chamber_temps[-1]-temp_chamber)>= 3 or np.abs(coldhead_temps[-1]-temp_coldhead)>= 3) and t!=1:
+    #    log_error(err_log_f_name,"Error in reported temperature vaule",t,False)
+    #    print("temp error")
+    #    error+=1
+    #    continue
     if error==0:    #extra insurance that the plot won't get updated if an error occurs
         controller.update(temp_heatex) # compute manipulated variable
         MV = controller.output # apply
         if MV > 0:
-           Heater.value = True
+           Heater.value = False
            Heat_on=True
            # write to event log that heater turned on/off
         else:
-           Heater.value = False
+           Heater.value = True
            Heat_on=False
     if Heat_on:
-            log_temps(data_f_name,data_header,[dt.now().strftime('%Y-%m-%d %H:%M:%S'), t, temp_heatex, temp_chamber, temp_chamber, MV,'On'],False)   #push the temperature readings to the log file
-            print(t, temp_heatex, temp_chamber, temp_chamber, MV,"On") #print out the temperature readings
+        log_temps(data_f_name,data_header,[dt.now().strftime('%Y-%m-%d %H:%M:%S'), t, temp_heatex, temp_coldhead, temp_chamber, MV,'On'],False)   #push the temperature readings to the log file
+        print(t, temp_heatex, temp_coldhead, temp_chamber, MV,"On") #print out the temperature readings
     else:
-        log_temps(data_f_name,data_header,[dt.now().strftime('%Y-%m-%d %H:%M:%S'), t, temp_heatex, temp_chamber, temp_chamber, MV,'Off'],False)
-        print(t, temp_heatex, temp_chamber, temp_chamber, MV,"Off") #print out the temperature readings
-        ch_temps = np.append(ch_temps, temp_chamber)
-        hex_temps = np.append(hex_temps, temp_heatex)
-        chamber_temps = np.append(chamber_temps, temp_chamber)
-        time_stamps.append(dt.now().strftime('%M:%S'))
-        ch_temps = ch_temps[1: plot_window + 1]
-        hex_temps = hex_temps[1:plot_window+1]
-        chamber_temps = chamber_temps[1:plot_window+1]
-        time_stamps = time_stamps[1: plot_window + 1]
-        #print(dt.now().strftime('%M:%S'))
-        chline.set_ydata(ch_temps)
-        hexline.set_ydata(hex_temps)
-        chline.set_xdata(time_stamps)
-        hexline.set_xdata(time_stamps)
-        chamberline.set_ydata(chamber_temps)
-        chamberline.set_xdata(time_stamps)
-        ax.relim()
-        #ax.set_ylim(0,24)
-        ax.autoscale_view()
-        ax.set_xticks(time_stamps[::100])
-        ax.set_xticklabels(time_stamps[::100])
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        #print(heatexchanger.in_waiting)
-        time.sleep(5)
+        log_temps(data_f_name,data_header,[dt.now().strftime('%Y-%m-%d %H:%M:%S'), t, temp_heatex, temp_coldhead, temp_chamber, MV,'Off'],False)
+        print(t, temp_heatex, temp_coldhead, temp_chamber, MV,"Off") #print out the temperature readings
+    coldhead_temps = np.append(coldhead_temps, temp_coldhead)
+    heatex_temps = np.append(heatex_temps, temp_heatex)
+    chamber_temps = np.append(chamber_temps, temp_chamber)
+    time_stamps.append(dt.now().strftime('%M:%S'))
+    coldhead_temps = coldhead_temps[1: plot_window + 1]
+    heatex_temps = heatex_temps[1:plot_window+1]
+    chamber_temps = chamber_temps[1:plot_window+1]
+    time_stamps = time_stamps[1: plot_window + 1]
+    #print(dt.now().strftime('%M:%S'))
+    chline.set_ydata(coldhead_temps)
+    hexline.set_ydata(heatex_temps)
+    chline.set_xdata(time_stamps)
+    hexline.set_xdata(time_stamps)
+    chamberline.set_ydata(chamber_temps)
+    chamberline.set_xdata(time_stamps)
+    ax.relim()
+    #ax.set_ylim(0,24)
+    ax.autoscale_view()
+    ax.set_xticks(time_stamps[::100])
+    ax.set_xticklabels(time_stamps[::100])
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+    #print(heatexchanger.in_waiting)
+    time.sleep(1)
+
+
+
+
+
+
