@@ -1,18 +1,25 @@
+"""
+@Author: Andrei Gogosha
+
+This is a python file to handle plotting of the temperature log files from the small cryostat as well as the radon log data from the
+deradonator. You can comment or uncomment the code down bellow to do this or import this file into another file to use the functions.
+"""
+
+import os
 import pandas as pd
-import matplotlib
+#import matplotlib
 import matplotlib.pyplot as plt   
 import numpy as np
-import os
 
 #Radon File Reading
 
 def radon_data_read_txt(directory,file_name):
-    output=np.array([[]],dtype='int')
+    output=np.array([[]],dtype='float32')
     with open(directory+file_name, encoding='utf8') as f:
         lines=f.readlines()[6:] #skip the header included in the data files created by radoneye
         for line in lines:
             temp_read=line.strip("\n ").split(")\t")    #deals with the funky formating of said log files
-            output=np.append(output,np.array([[int(temp_read[1].strip(" "))]],dtype='int'),axis=1)
+            output=np.append(output,np.array([[float(temp_read[1].strip(" "))]],dtype='float32'),axis=1)
     # add an index to the output, this will be used for the x values of plots
     output= np.append(output,np.array([np.arange(0,len(output[0]))]),axis=0)
     return output
@@ -57,46 +64,130 @@ def temp_data_read_csv(directory,file_names):
     output= np.append(output,np.array([np.arange(0,len(output[0]))]),axis=0)
     return output, time_out
 
-#Temperature Plotting
+def convert_pCi(data):
+    return data*(0.037/0.001)
 
-def p_plot(x_data,y_data,title,lables,tics):
+#Temperature Plotting
+def get_tics(data, interval):
+    tics=np.array([[],[]])
+    for count, value in enumerate(data):
+        if count%interval==0:
+            tics=np.append(tics,[[count],[value]],axis=1)
+    return tics
+
+def temp_plot(x_data,y_data,title,lables,tics,cutoff):
     plt.figure(figsize=(20, 20))
-    for i in range(len(y_data)):
-        plt.plot(x_data,y_data[i],label=lables[i])
-    #plt.ylim(-94,-95)
+    for count, y_cords in enumerate(y_data):
+        plt.plot(x_data,y_cords,label=lables[count])
+    if cutoff[0]:
+        plt.ylim(cutoff[1],cutoff[2])
     plt.title(title)
     plt.xlabel("Time")
     plt.ylabel("Temperature (\u00b0C)")
-    plt.xticks(tics[0],tics[1],rotation='vertical', fontsize=10)
+    plt.xticks(tics[0,:].astype('int'),tics[1,:],rotation='vertical', fontsize=10)
     plt.legend(loc='best')
     plt.show()
 
-def get_tics(data, interval):
-    tics=[[],[]]
-    for i in range(len(data)):
-        if i%interval==0:
-            tics[0].append(i)
-            tics[1].append(data[i])
-    return tics
+def radon_plot(x_data,y_data,titles,multiple):
+    plt.figure(figsize=(20, 20))
+    if multiple[0]:
+        for count, y_cords in enumerate(y_data):
+            plt.subplot(multiple[1],multiple[2],count+1)
+            plt.plot(x_data[count],y_cords)
+            plt.title(titles[count])
+            plt.xlabel("Time (Hours)")
+            plt.ylabel(r"Radon Level ($\frac{Bq}{m^3}$)")
+    else:
+        plt.plot(x_data,y_data)
+        plt.title(titles)
+        plt.xlabel("Time (Hours)")
+        plt.ylabel(r"Radon Level ($\frac{Bq}{m^3}$)")
+    plt.show()
 
-#Ploting
-ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname("All plot.py")))
-target_dir=ROOT_DIR+"/Logs/"
-dir_list = os.listdir(ROOT_DIR+"/Logs/")
-dir_list.sort()
 
-# Uncomment and change the following paramaters to plot either radon levle data or temperature data
+if __name__ == '__main__':
+#   Ploting
+    ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname("All plot.py")))
+    target_dir=ROOT_DIR+"/Logs/"
+    dir_list = os.listdir(ROOT_DIR+"/Logs/")
+    dir_list.sort()
 
-# radon_data=radon_data_read_csv(ROOT_DIR+"/","Radon_Full_Background.csv")
-# radon_data=radon_data_read_txt(ROOT_DIR+"/","radon levels 11-22-22.txt")
-# plt.plot(radon_data[1,-6:],radon_data[0,-6:],label="Radon Level")
-# plt.title(r"Radon Level $\frac{Bq}{m^3}$ vs Time Hours")
-# plt.xlabel("Time (Hours)")
-# plt.ylabel(r"Radon Level ($\frac{Bq}{m^3}$)")
-# plt.show()
+    # radon_data=radon_data_read_txt(ROOT_DIR+"/","radon data 12-1-22 15 11.txt")
+    # radon_data2=radon_data_read_txt(ROOT_DIR+"/","last pCi l data 12-1-22 9 19.txt")
+    # converted2=convert_pCi(radon_data2[0,:])
+    # radon_data3=radon_data_read_txt(ROOT_DIR+"/",'radon data 12-2-22 8 08.txt')
+    # converted=convert_pCi(radon_data3[0,:]) #use when you want to convert from pCi/l to bq/m^3
+    # radon_data4=radon_data_read_txt(ROOT_DIR+"/",'radon data 11-29-22 7 58.txt')
+    # input_x_data=np.array([radon_data4[1,-21:],radon_data2[1],radon_data2[1],radon_data[1],radon_data3[1],radon_data3[1]],dtype='object')
+    
+    # input_y_data=np.array([radon_data4[0,-21:],radon_data2[0],converted2,radon_data[0],radon_data3[0],converted],dtype='object')
+    # radon_plot(input_x_data,input_y_data,[r"Radon Level $\frac{Bq}{m^3}$ vs Time Hours",r"Radon Level $\frac{pCi}{l}$ vs Time Hours",r"Converted Radon Level $\frac{Bq}{m^3}$ vs Time Hours",r"Converted Radon Level $\frac{Bq}{m^3}$ vs Time Hours",r"Radon Level $\frac{pCi}{l}$ vs Time Hours",r"Converted Radon Level $\frac{Bq}{m^3}$ vs Time Hours"]
+    # ,[True,2,3])
 
-# temp_data, time_data=temp_data_read_csv(ROOT_DIR+"/Logs/",dir_list)
-# lin_names=["Cold Head","Heat Exchanger Front", "Heat Exchanger Back","Chamber"]
-# title="Cryostat Temperatures Vs Time"
-# tics=get_tics(time_data,50000)
-# p_plot(temp_data[4],temp_data[0:4],title,lin_names,tics)
+    # Uncomment and change the following paramaters to plot either radon levle data or temperature data
+
+    # radon_data=radon_data_read_csv(ROOT_DIR+"/","Radon_Full_Background.csv")
+    # radon_data=radon_data_read_txt(ROOT_DIR+"/","radon data 12-1-22 15 11.txt")
+    # print(np.average(radon_data[0,:]))
+    # plt.figure(figsize=(20, 20))
+    # plt.subplot(2,3,4)
+    # plt.plot(radon_data[1,:],radon_data[0,:],label="Radon Level")
+    # plt.title(r"Radon Level $\frac{Bq}{m^3}$ vs Time Hours")
+    # plt.xlabel("Time (Hours)")
+    # plt.ylabel(r"Radon Level ($\frac{Bq}{m^3}$)")
+
+    # radon_data2=radon_data_read_txt(ROOT_DIR+"/","last pCi l data 12-1-22 9 19.txt")
+    # print(np.average(radon_data2[0,:]))
+    # plt.subplot(2,3,2)
+    # plt.plot(radon_data2[1,:],radon_data2[0,:],label="Radon Level")
+    # plt.title(r"Radon Level $\frac{pCi}{l}$ vs Time Hours")
+    # plt.xlabel("Time (Hours)")
+    # plt.ylabel(r"Radon Level ($\frac{pCi}{l}$)")
+
+    # converted2=convert_pCi(radon_data2[0,:]) #use when you want to convert from pCi/l to bq/m^3
+    # plt.subplot(2,3,3)
+    # plt.plot(radon_data2[1,:],converted2,label="Radon Level")
+    # plt.title(r"Converted Radon Level $\frac{Bq}{m^3}$ vs Time Hours")
+    # plt.xlabel("Time (Hours)")
+    # plt.ylabel(r"Converted Radon Level ($\frac{Bq}{m^3}$)")
+
+    # radon_data3=radon_data_read_txt(ROOT_DIR+"/",'radon data 12-2-22 8 08.txt')
+    # #converted=convert_pCi(radon_data2[0,:]) #use when you want to convert from pCi/l to bq/m^3
+    # plt.subplot(2,3,5)
+    # plt.plot(radon_data3[1,:],radon_data3[0,:],label="Radon Level")
+    # plt.title(r"Radon Level $\frac{pCi}{l}$ vs Time Hours")
+    # plt.xlabel("Time (Hours)")
+    # plt.ylabel(r"Radon Level ($\frac{pCi}{l}$)")
+
+    # converted=convert_pCi(radon_data3[0,:]) #use when you want to convert from pCi/l to bq/m^3
+    # plt.subplot(2,3,6)
+    # plt.plot(radon_data3[1,:],converted,label="Radon Level")
+    # plt.title(r"Converted Radon Level $\frac{Bq}{m^3}$ vs Time Hours")
+    # plt.xlabel("Time (Hours)")
+    # plt.ylabel(r"Converted Radon Level ($\frac{Bq}{m^3}$)")
+    
+
+    # radon_data4=radon_data_read_txt(ROOT_DIR+"/",'radon data 11-29-22 7 58.txt')
+    # plt.subplot(2,3,1)
+    # plt.plot(radon_data4[1,-21:],radon_data4[0,-21:],label="Radon Level")
+    # plt.title(r"Radon Level $\frac{Bq}{m^3}$ vs Time Hours")
+    # plt.xlabel("Time (Hours)")
+    # plt.ylabel(r"Radon Level ($\frac{Bq}{m^3}$)")
+    # plt.show()
+    
+    # radon_data=radon_data_read_txt(ROOT_DIR+"/","radon data 12-13-22.txt")
+    # print(np.average(radon_data[0,-8:]))
+    # plt.figure(figsize=(20, 20))
+    # # plt.subplot(2,3,4)
+    # plt.plot(radon_data[1,-8:],radon_data[0,-8:],label="Radon Level")
+    # plt.title(r"Radon Level $\frac{Bq}{m^3}$ vs Time Hours")
+    # plt.xlabel("Time (Hours)")
+    # plt.ylabel(r"Radon Level ($\frac{Bq}{m^3}$)")
+    # plt.show()
+    
+
+    temp_data, time_data=temp_data_read_csv(ROOT_DIR+"/Logs/",dir_list[-14:])
+    lin_names=["Cold Head","Heat Exchanger Front", "Heat Exchanger Back","Chamber"]
+    plot_name="Cryostat Temperatures Vs Time"
+    x_lables=get_tics(time_data,1000)
+    temp_plot(temp_data[4],temp_data[0:4],plot_name,lin_names,x_lables,[False,0,0])
