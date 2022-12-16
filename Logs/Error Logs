@@ -1,0 +1,7 @@
+-------------------------------------------------
+2022-12-13 11:04:12
+Traceback (most recent call last):
+  File "/tmp/ipykernel_30473/119190647.py", line 58, in <module>
+    t3 = time.now()
+AttributeError: module 'time' has no attribute 'now'
+
