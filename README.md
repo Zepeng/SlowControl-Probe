@@ -6,6 +6,10 @@ https://learn.adafruit.com/adafruit-max31856-thermocouple-amplifier/wiring-and-t
 Install library for Adafruit MAX31865
 https://learn.adafruit.com/adafruit-max31865-rtd-pt100-amplifier
 
+sensirion sfm3000:
+https://github.com/Sensirion/arduino-i2c-sfm3000
+https://github.com/Sensirion/arduino-core
+
 PID control code: https://github.com/ivmech/ivPID
 
 Front panel with Dash: https://dash.plotly.com/
