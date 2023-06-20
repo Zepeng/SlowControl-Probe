@@ -1,6 +1,6 @@
 """
-@Author: Andrei Gogosha, Peter Knauss
-Python file to run the temperature control of the small cryostat.
+@Author: Andrei Gogosha, Peter Knauss, Melissa Medina-P.
+Python file to run the temperature control of the CryoProbe
 Need to update PID control values for faster loop exicution
 """
 import time
@@ -29,24 +29,20 @@ def open_file(file_name,data_header):
     return log_file     # returns the log file so it can be saved as a variable and manipulated later
 
 def calibrated_temps(temp, TC):
-    if temp > 35:
-        raise Exception('Temperature has reached too high on TC {}'.format(TC))
-    if 'HeatExB' in TC:
+    #if temp > 35:
+    #    raise Exception('Temperature has reached too high on TC {}'.format(TC))
+    if 'Tip' in TC:
         RawRange = 124.8
         ReferenceRange = 116.3
         ActualTemp = (((temp + 112.6) * ReferenceRange) / RawRange) - 96.7
-    if 'HeatExF' in TC:
+    if 'Ceramic' in TC:
         RawRange = 179.7
         ReferenceRange = 169.5
         ActualTemp = (((temp + 159.9) * ReferenceRange) / RawRange) - 150.9
-    if 'ColdHead' in TC:
+    if 'Flange' in TC:
         RawRange = 179
         ReferenceRange = 169.1
         ActualTemp = (((temp + 159.6) * ReferenceRange) / RawRange) - 149.2
-    if 'Chamber' in TC:
-        RawRange = 34
-        ReferenceRange = 33.2
-        ActualTemp = (((temp + 21.8) * ReferenceRange) / RawRange) - 13.4
         
     return ActualTemp
     
@@ -56,10 +52,10 @@ def signal_handler(signum, frame):
 signal.signal(signal.SIGINT, signal_handler) # Raspberry Pi had unreliable Ctrl-C handling, catch independently
 
 if __name__ == '__main__':
-    ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname("Temperature-Control-Only.py")))
+    ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname("CryoProbe_Temp_Control.py")))
 
     data_f_name='Temp log {}.csv'.format(dt.now().strftime('%m-%d-%Y, %H-%M'))
-    data_header=['Rt', 'temp_ch', 'temp_hex_f', 'temp_hex_b', 'temp_chamber','Heat F','Heat B']
+    data_header=['Rt', 'temp_tip', 'temp_ceramic', 'temp_flange','Relay']
     # header reads [Real time, Cold head temp, Heat exchander front temp, heat exhchanger back temp, champer temp, Heater 1 status, Heater 2 status]
     log_file = open_file(data_f_name,data_header)
 
@@ -67,28 +63,21 @@ if __name__ == '__main__':
     spi = board.SPI()
 
     # allocate a CS pin and set the direction
-    cs13 = digitalio.DigitalInOut(board.D13)
-    cs13.direction = digitalio.Direction.OUTPUT
     cs16 = digitalio.DigitalInOut(board.D16)
-    cs16.direction = digitalio.Direction.OUTPUT
-    cs25 = digitalio.DigitalInOut(board.D25)
-    cs25.direction = digitalio.Direction.OUTPUT
-    cs26 = digitalio.DigitalInOut(board.D26)
-    cs26.direction = digitalio.Direction.OUTPUT
-    HeaterF = digitalio.DigitalInOut(board.D17)
-    HeaterF.direction= digitalio.Direction.OUTPUT
-    HeaterB = digitalio.DigitalInOut(board.D18)
-    HeaterB.direction = digitalio.Direction.OUTPUT
+    cs21 = digitalio.DigitalInOut(board.D21)
+    cs19 = digitalio.DigitalInOut(board.D19)
+    Relay = digitalio.DigitalInOut(board.D17)
+    Relay.direction= digitalio.Direction.OUTPUT
 
-    # create a thermocouple object with the above pin assignements
-    ColdHead = adafruit_max31865.MAX31865(spi, cs13, wires=2)
-    HeatExF = adafruit_max31865.MAX31865(spi, cs16, wires=2)    #Heat exchanger thermocouple facing the coldhead
-    HeatExB = adafruit_max31865.MAX31865(spi, cs25, wires=2)   #Heat exchanger thermocouple facing the chamber
-    Chamber = adafruit_max31865.MAX31865(spi, cs26, wires=2)
+    #Create a thermocouple object with the above pin assignements
+    Tip = adafruit_max31865.MAX31865(spi, cs16, wires=2)
+    Ceramic = adafruit_max31865.MAX31865(spi, cs21, wires=2)   
+    Flange = adafruit_max31865.MAX31865(spi, cs19, wires=2)   
+    #Chamber = adafruit_max31865.MAX31865(spi, cs19, wires=2)
 
-    HeaterF.value = False
-    HeatF_status = 0
-    targetT1 = -115   #initial inputs for PID control
+    Relay.value = False
+    Relay_status = 0
+    targetT1 = -35   #initial inputs for PID control
     P1 = 0.2*0.6
     I1 = 1.2*0.2/60
     D1 = 3*0.2*60/40
@@ -100,22 +89,7 @@ if __name__ == '__main__':
     controllerF.SetPoint = targetT1             # initialize the controler
     controllerF.setSampleTime(0.25)
 
-    HeaterB.value = False 
-    HeatB_status = 0
-    targetT2 = -94.5     #initial inputr fot PID control
-    P2 = 0.2*0.6
-    P2 = 0.2*0.6
-    I2 = 1.2*0.2/60
-    D2 = 3*0.2*60/40
-    #P2 = 20*0.6
-    #I2 = 1.2*20/0.5
-    #D2 = 3*20*0.5/40
-
-    controllerB = PID.PID(P2, I2, D2)     #creats the pid control
-    controllerB.SetPoint = targetT2     #initialize the controler
-    controllerB.setSampleTime(0.25)
-
-    Ledger=np.array([[], [], [], [], [], [], []])
+    Ledger=np.array([[], [], [], [], []])
 
     try:     # try and excep statement used to catch error and log them to a specified file
         runlen=1
@@ -127,18 +101,19 @@ if __name__ == '__main__':
                 data_f_name='Temp log {}.csv'.format(dt.now().strftime('%m-%d-%Y, %H-%M'))
                 log_file.close()
                 log_file = open_file(data_f_name, data_header)
-            #reads the coldhead, heat exchanger front and back, chamber temepratures
+            #Reads the tip, ceramic and flange temperatures
             #t1=time.time()
-            #ColdHead.initiate_one_shot_measurement()
-            #HeatExF.initiate_one_shot_measurement()
-            #HeatExB.initiate_one_shot_measurement()
-            #Chamber.initiate_one_shot_measurement()
-            #print(ColdHead.unpack_temperature(), ' ', HeatExF.unpack_temperature(), ' ', HeatExB.unpack_temperature(), ' ', Chamber.unpack_temperature())
-            #ColdHead._wait_for_oneshot()
-            temp_coldhead=calibrated_temps(ColdHead.temperature, 'ColdHead')
-            temp_HeatExF=calibrated_temps(HeatExF.temperature,'HeatExF')
-            temp_HeatExB=calibrated_temps(HeatExB.temperature,'HeatExB')
-            temp_chamber=calibrated_temps(Chamber.temperature,'Chamber')
+            #Tip.initiate_one_shot_measurement()
+            #Ceramic.initiate_one_shot_measurement()
+            #Flange.initiate_one_shot_measurement()
+
+            #print(Tip.unpack_temperature(), ' ', Ceramic.unpack_temperature(), ' ', Flange.unpack_temperature())
+            #Tip._wait_for_oneshot()
+            print(Tip.temperature, Tip.resistance, Ceramic.temperature, Ceramic.resistance, Flange.temperature, Flange.resistance)
+            temp_Tip= Tip.temperature #calibrated_temps(Tip.temperature, 'Tip')
+            temp_Ceramic= Ceramic.temperature #calibrated_temps(Ceramic.temperature,'Ceramic')
+            temp_Flange=Flange.temperature #calibrated_temps(Flange.temperature,'Flange')
+
             #if not HeatExF.oneshot_pending:
             #    temp_HeatExF=calibrated_temps(HeatExF.temperature,'HeatExF')
             #else:
@@ -149,53 +124,40 @@ if __name__ == '__main__':
             #else:
             #    #HeatExB._wait_for_oneshot()
             #    temp_HeatExB=calibrated_temps(HeatExB.temperature,'HeatExB')
-            #if not Chamber.oneshot_pending:
-            #    temp_chamber=calibrated_temps(Chamber.temperature,'Chamber')
-            #else:
-            #    #Chamber._wait_for_oneshot()
-            #    temp_chamber=calibrated_temps(Chamber.temperature,'Chamber')
             #t2=time.time()
-            controllerF.update(temp_HeatExF) # update the pid controlers
-            controllerB.update(temp_HeatExB)
+            
+            controllerF.update(temp_Tip) # update the pid controlers
+
             MV1 = 10
-            MV2 = 10
             #MV1 = controllerF.output # get the new pid values
-            #MV2 = controllerB.output
-            if MV1 > 0:      #temp too low turn heater on
-                HeaterF.value = True
-                HeatF_status = 1
+            if MV1 > 0:      #temp too low close valve
+                Relay.value = True
+                Rel_status = 11
             else:     #turn heat off
-                HeaterF.value = False
-                HeatF_status = 0
-            if MV2 > 0:     #temp too low turn heater on
-                HeaterB.value = True
-                HeatB_status = 1
-            else:     #turn heat off
-                HeaterB.value = False
-                HeatB_status = 0
+                Relay.value = False
+                Rel_status = 10
             time_stamp= dt.now().strftime('%H:%M:%S')     #timestamp used for x axis tick
             #t3 = time.time()
-            Ledger=np.append(Ledger,[[time_stamp], [temp_coldhead], [temp_HeatExF], [temp_HeatExB], [temp_chamber], [HeatF_status], [HeatB_status]],axis=1 )
+            Ledger=np.append(Ledger,[[time_stamp], [temp_Tip], [temp_Ceramic], [temp_Flange], [Rel_status]],axis=1 )
             if runlen==itt_len:     #change to be however many itterations you want before updating logs
-                Coldhead_avg=np.average(Ledger[1,-itt_len:].astype('float32'))
-                HeatExF_avg=np.average(Ledger[2,-itt_len:].astype('float32'))
-                HeatExB_avg=np.average(Ledger[3,-itt_len:].astype('float32'))
-                Chamber_avg=np.average(Ledger[4,-itt_len:].astype('float32'))
-                log_temps(data_f_name,data_header,[time_stamp, Coldhead_avg, HeatExF_avg, HeatExB_avg, Chamber_avg, HeatF_status , HeatB_status])     #write to temp log file
+                Tip_avg=np.average(Ledger[1,-itt_len:].astype('float32'))
+                Ceramic_avg=np.average(Ledger[2,-itt_len:].astype('float32'))
+                Flange_avg=np.average(Ledger[3,-itt_len:].astype('float32'))
+                log_temps(data_f_name,data_header,[time_stamp, Tip_avg, Ceramic_avg, Flange_avg, Rel_status ])     #write to temp log file
                 log_file.flush() #pushes the data collected this loop to the csv.
                 runlen = 0
             if len(Ledger[1])>=itt_len+1:     #only holds onto last itt len +1 temperatures in memory
                 Ledger=np.delete(Ledger, obj=0,axis=1)
             #t4=time.time()
             #print(t2-t1,t4-t3,elapsed)
-            print('{}, {}, {}, {}'.format(ColdHead.temperature, HeatExF.temperature, HeatExB.temperature, Chamber.temperature))
+            #print('{}, {}, {}'.format(Tip.temperature, Ceramic.temperature, Flange.temperature))
             #print(Ledger[:,-1:])
             runlen += 1
             elapsed = time.time() - now # how long was it running?
             if elapsed < loop_time: time.sleep(loop_time-elapsed) #make loop run every 0.25 seconds
             else: time.sleep(0.1)
             
-    #Opens the relays (stops the heaters) when program interrupted and writes to error log if need be
+    #Opens the relay when program interrupted and writes to error log if need be
     except KeyboardInterrupt:
         print('\n')
         print('Interrupted')
@@ -210,6 +172,6 @@ if __name__ == '__main__':
             file.write('\n')
         traceback.print_exc()
     finally:
-        HeaterF.value = False
-        HeaterB.value = False
+        Relay.value = False
+
         
