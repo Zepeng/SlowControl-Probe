@@ -1,6 +1,8 @@
-# SlowControl-Arduino
-Cryogenic probe test stand slow control system with Arduino
+# SlowControl-Probe
+Cryogenic probe test stand slow control system with Raspberry Pi 
 
+Install circuitpython on Raspberry pi
+https://learn.adafruit.com/circuitpython-on-raspberrypi-linux
 Install library for Adafruit MAX31856
 https://learn.adafruit.com/adafruit-max31856-thermocouple-amplifier/wiring-and-test
 Install library for Adafruit MAX31865
